@@ -1,10 +1,12 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter import filedialog
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 
+import csv
 import numpy as np
 
 class GraphApp:
@@ -56,19 +58,14 @@ class GraphApp:
 
 
     def create_tabular_tab(self):
-        # Поля
-        ttk.Label(self.tabular_tab, text="X значения:").grid(row=0, column=0, padx=5, pady=5)
-        self.x_values = ttk.Entry(self.tabular_tab, width=40)
-        self.x_values.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Label(self.tabular_tab, text="Выберите файл:").grid(row=0, column=0, padx=5, pady=5)
+        self.file_path_label = ttk.Label(self.tabular_tab, text="Нет файла")
+        self.file_path_label.grid(row=1, column=0, padx=5, pady=5)
         
-        ttk.Label(self.tabular_tab, text="Y значения:").grid(row=1, column=0, padx=5, pady=5)
-        self.y_values = ttk.Entry(self.tabular_tab, width=40)
-        self.y_values.grid(row=1, column=1, padx=5, pady=5)
-        
-        # Кнопка
+
         plot_btn = ttk.Button(self.tabular_tab, text="Построить", command=self.plot_tabular)
-        plot_btn.grid(row=2, column=1, padx=5, pady=10)
-        
+        plot_btn.grid(row=1, column=1, padx=5, pady=10)
+
         # График
         self.fig_tabular = plt.Figure(figsize=(5, 4))
         self.ax_tabular = self.fig_tabular.add_subplot(111)
@@ -134,14 +131,30 @@ class GraphApp:
             
     def plot_tabular(self):
         try:
-            x_str = self.x_values.get().strip()
-            y_str = self.y_values.get().strip()
+            file_path = filedialog.askopenfilename(
+                title="Выберите csv файл",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            )
 
-            x_vals = list(map(float, x_str.replace(" ","").split(',')))
-            y_vals = list(map(float, y_str.replace(" ","").split(',')))
+            if not file_path:
+                return
+            
+            x_vals = []
+            y_vals = []
 
-            if len(x_vals) != len(y_vals):
-                raise ValueError("Количество X и Y должно совпадать")
+            with open(file_path,'r',newline='') as f:
+                csv_reader = csv.reader(f)
+                for row in csv_reader:
+                    if len(row) < 2:
+                        raise ValueError("Каждая строка должна иметь два значения")
+                    try:
+                        x = float(row[0])
+                        y = float(row[1])
+                    except Exception as e:
+                        raise ValueError(f"Неверные данные в строке {csv_reader.line_num}: {e}")
+                    
+                    x_vals.append(x)
+                    y_vals.append(y)
 
             self.ax_tabular.clear()
 
@@ -153,7 +166,9 @@ class GraphApp:
             self.ax_tabular.legend()
 
             self.canvas_tabular.draw()
-
+            
+            self.file_path_label.config(text=file_path)
+            
         except Exception as e:
             tk.messagebox.showerror("Ошибка", str(e))
         
