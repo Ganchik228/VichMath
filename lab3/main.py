@@ -51,7 +51,8 @@ class GraphApp:
         self.root = root
         self.root.title("График функций")
         self.root.geometry("1200x800")  # Устанавливаем начальный размер
-        
+        self.extrema_formula = "(x-1.5) * sqrt(x + 4) + sin(pi*x)"
+
         # Вкладки
         self.notebook = ttk.Notebook(root)
         
@@ -200,8 +201,9 @@ class GraphApp:
     def create_extrema_tab(self):
         # Функция
         ttk.Label(self.extrema_tab, text="f(x):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.extrema_formula_entry = ttk.Entry(self.extrema_tab, width=40)
-        self.extrema_formula_entry.grid(row=0, column=1, columnspan=2, padx=5, pady=5)
+        ttk.Label(self.extrema_tab, text=self.extrema_formula, wraplength=400).grid(
+            row=0, column=1, columnspan=2, padx=5, pady=5, sticky=tk.W
+        )
         
         # Интервал поиска
         ttk.Label(self.extrema_tab, text="Интервал поиска [a, b]:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
@@ -586,15 +588,14 @@ class GraphApp:
             return None
 
     def solve_extrema_parabolic(self):
-        """Метод парабол для поиска экстремума"""
         try:
-            formula = self.extrema_formula_entry.get().strip()
+            formula = self.extrema_formula
             a_str = self.extrema_a_entry.get().strip()
             b_str = self.extrema_b_entry.get().strip()
             epsilon_str = self.extrema_epsilon_entry.get().strip()
             
-            if not formula or not a_str or not b_str or not epsilon_str:
-                raise ValueError("Заполните все поля")
+            if not a_str or not b_str or not epsilon_str:
+                raise ValueError("Заполните границы интервала и точность")
         
             a = float(a_str)
             b = float(b_str)
@@ -603,67 +604,74 @@ class GraphApp:
             if a >= b:
                 raise ValueError("a должно быть меньше b")
             
-            # Начальные точки для метода парабол
             x1 = a
-            x2 = (a + b) / 2
             x3 = b
+            x2 = (a + b) / 2
+
+            f1 = self.evaluate_function(formula, x1)
+            f2 = self.evaluate_function(formula, x2)
+            f3 = self.evaluate_function(formula, x3)
             
             iterations = []
             iteration_count = 0
             max_iterations = 1000
+            edge_tol = max(epsilon * 0.1, 1e-10)
             
             while iteration_count < max_iterations:
                 iteration_count += 1
+
+                numerator = ((x2 - x1) ** 2) * (f2 - f3) - ((x2 - x3) ** 2) * (f2 - f1)
+                denominator = ((x2 - x1) * (f2 - f3)) - ((x2 - x3) * (f2 - f1))
                 
-                # Вычисляем значения функции
-                f1 = self.evaluate_function(formula, x1)
-                f2 = self.evaluate_function(formula, x2)
-                f3 = self.evaluate_function(formula, x3)
-                
-                # Проверяем условие унимодальности
-                if not (x1 < x2 < x3):
-                    raise ValueError("Нарушен порядок точек")
-                
-                # Вычисляем коэффициенты параболы
-                a0 = f1
-                a1 = (f2 - f1) / (x2 - x1)
-                a2 = ((f3 - f1) / (x3 - x1) - (f2 - f1) / (x2 - x1)) / (x3 - x2)
-                
-                # Новая точка (вершина параболы)
-                if abs(a2) < 1e-12:
-                    raise ValueError("Вторая производная близка к нулю")
-                
-                x_new = (x1 + x2) / 2 - a1 / (2 * a2)
-                f_new = self.evaluate_function(formula, x_new)
-                
-                iterations.append({
-                    'iteration': iteration_count,
-                    'x1': x1, 'x2': x2, 'x3': x3, 'x_new': x_new,
-                    'f1': f1, 'f2': f2, 'f3': f3, 'f_new': f_new,
-                    'interval_length': x3 - x1
-                })
-                
-                # Проверка точности
-                if x3 - x1 < epsilon:
-                    break
-                
-                # Обновление интервала
-                if x_new < x2:
-                    if f_new < f2:
-                        x3, x2 = x2, x_new
-                    else:
-                        x1 = x_new
+                if abs(denominator) < 1e-14:
+                    x_new = (x1 + x3) / 2
                 else:
-                    if f_new < f2:
-                        x1, x2 = x2, x_new
+                    x_new = x2 - 0.5 * numerator / denominator
+
+                if not (x1 < x_new < x3):
+                    x_new = (x1 + x3) / 2
+
+                if x_new - x1 < edge_tol:
+                    x_new = x1 + edge_tol
+                elif x3 - x_new < edge_tol:
+                    x_new = x3 - edge_tol
+                if abs(x_new - x2) < edge_tol:
+                    shift = edge_tol if x_new < x2 else -edge_tol
+                    x_new = min(max(x1 + edge_tol, x_new + shift), x3 - edge_tol)
+
+                f_new = self.evaluate_function(formula, x_new)
+
+                iteration_info = {
+                    'iteration': iteration_count,
+                    'x1': x1,
+                    'x2': x2,
+                    'x3': x3,
+                    'x_new': x_new,
+                    'f_new': f_new,
+                    'interval_length': abs(x3 - x1)
+                }
+                iterations.append(iteration_info)
+
+                if f_new < f2:
+                    if x_new < x2:
+                        x3, f3 = x2, f2
                     else:
-                        x3 = x_new
+                        x1, f1 = x2, f2
+                    x2, f2 = x_new, f_new
+                else:
+                    if x_new < x2:
+                        x1, f1 = x_new, f_new
+                    else:
+                        x3, f3 = x_new, f_new
+
+                iteration_info['interval_length'] = abs(x3 - x1)
+
+                if iteration_info['interval_length'] < epsilon:
+                    break
+
+            extremum_x = x2
+            extremum_f = f2
             
-            # Результат
-            extremum_x = (x1 + x3) / 2
-            extremum_f = self.evaluate_function(formula, extremum_x)
-            
-            # Определение типа экстремума
             first_derivative = self.numerical_derivative(formula, extremum_x)
             second_derivative = self.numerical_second_derivative(formula, extremum_x)
             
@@ -677,12 +685,10 @@ class GraphApp:
             else:
                 extremum_type = "Неопределенный"
             
-            # Отображение результатов
             self.display_extrema_iterations(iterations, extremum_x, extremum_f, 
                                           first_derivative, second_derivative, 
                                           extremum_type, iteration_count)
             
-            # Построение графика
             self.plot_extrema_graph(formula, extremum_x, a, b)
             
         except Exception as e:
@@ -690,7 +696,6 @@ class GraphApp:
 
     def display_extrema_iterations(self, iterations, extremum_x, extremum_f, 
                                  first_deriv, second_deriv, extremum_type, iteration_count):
-        """Отображает результаты итераций поиска экстремума"""
         self.extrema_iterations_text.delete(1.0, tk.END)
         
         header = f"{'№':<3} {'x1':<10} {'x2':<10} {'x3':<10} {'x_new':<10} {'f_new':<12} {'|x3-x1|':<12}\n"
@@ -721,9 +726,7 @@ class GraphApp:
         self.extrema_result_label.config(text=result_text)
 
     def plot_extrema_graph(self, formula, extremum_x, original_a, original_b):
-        """Строит график функции с найденным экстремумом"""
         try:
-            # Расширяем интервал для лучшей визуализации
             margin = abs(original_b - original_a) * 0.2
             x_min = original_a - margin
             x_max = original_b + margin
@@ -742,10 +745,8 @@ class GraphApp:
             
             self.ax_extrema.clear()
             
-            # График функции
             self.ax_extrema.plot(x_vals, y_vals, 'b-', label=f'f(x) = {formula}', linewidth=2)
             
-            # Найденный экстремум
             f_extremum = self.evaluate_function(formula, extremum_x)
             second_deriv = self.numerical_second_derivative(formula, extremum_x)
             
@@ -759,7 +760,6 @@ class GraphApp:
             self.ax_extrema.plot(extremum_x, f_extremum, marker=marker, color=color, 
                                markersize=10, label=f'{label_type}: x = {extremum_x:.6f}')
             
-            # Исходный интервал
             self.ax_extrema.axvline(x=original_a, color='gray', linestyle='--', alpha=0.7, 
                                   label=f'Интервал [{original_a:.2f}, {original_b:.2f}]')
             self.ax_extrema.axvline(x=original_b, color='gray', linestyle='--', alpha=0.7)

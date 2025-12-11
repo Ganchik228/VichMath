@@ -1,84 +1,90 @@
-import numpy as np
 import math
 
-# -----------------------------
-# Вспомогательные функции
-# -----------------------------
 
-def vec_norm(v):
-    """Евклидова норма вектора"""
-    return math.sqrt(sum(vi**2 for vi in v))
+def vec_add(a, b):
+    return [a[i] + b[i] for i in range(len(a))]
 
-def print_vector(name, v):
-    print(f"{name} = [{v[0]:.8f}, {v[1]:.8f}]")
+def vec_sub(a, b):
+    return [a[i] - b[i] for i in range(len(a))]
 
-# -----------------------------
-# Система уравнений
-# -----------------------------
+def vec_mul_scalar(a, s):
+    return [a[i] * s for i in range(len(a))]
+
+def dot(a, b):
+    return sum(a[i] * b[i] for i in range(len(a)))
+
+def vec_norm(a):
+    return math.sqrt(dot(a, a))
+
+
+def mat_vec_mul(A, x):
+    return [sum(A[i][j]*x[j] for j in range(len(x))) for i in range(len(A))]
+
+def mat_inv_2x2(A):
+    det = A[0][0]*A[1][1] - A[0][1]*A[1][0]
+    return [
+        [ A[1][1]/det, -A[0][1]/det ],
+        [-A[1][0]/det,  A[0][0]/det ]
+    ]
+
 def F(x):
     x1, x2 = x
 
-    eq1 = math.cos(math.log(0.5 + x1**2)) - \
-          math.sin(math.log(0.4 + (x2/2)**2)) - 0.025
+    f1 = math.cos(math.log(0.5 + x1**2)) \
+         - math.sin(math.log(0.4 + (x2/2)**2)) - 0.025
 
-    eq2 = 4 / (x1**2 + 2*x2**2 + 4 - math.cos(0.01*x1*x2)) - 0.3
+    denom = x1**2 + 2*x2**2 + 4 - math.cos(0.01*x1*x2)
+    f2 = 4/denom - 0.3
 
-    return np.array([eq1, eq2])
+    return [f1, f2]
 
-# -----------------------------
-# Якобиан системы
-# -----------------------------
+
+
 def J(x):
     x1, x2 = x
 
-    # Частные производные (симв. вычисление вручную)
-    # Уравнение 1
-    df1dx1 = -math.sin(math.log(0.5 + x1**2)) * (2*x1)/(0.5 + x1**2)
-    df1dx2 = -math.cos(math.log(0.4 + (x2/2)**2)) * ((x2/2)/(0.4 + (x2/2)**2))
+    d11 = -math.sin(math.log(0.5 + x1*x1)) * (2*x1)/(0.5 + x1*x1)
+    d12 = -math.cos(math.log(0.4 + (x2/2)**2)) * ((x2/2)/(0.4 + (x2/2)**2))
 
-    # Уравнение 2
-    denom = (x1**2 + 2*x2**2 + 4 - math.cos(0.01*x1*x2))
-    dDen_dx1 = 2*x1 + math.sin(0.01*x1*x2) * 0.01 * x2
-    dDen_dx2 = 4*x2 + math.sin(0.01*x1*x2) * 0.01 * x1
+    denom = x1*x1 + 2*x2*x2 + 4 - math.cos(0.01*x1*x2)
 
-    df2dx1 = -4 * dDen_dx1 / (denom**2)
-    df2dx2 = -4 * dDen_dx2 / (denom**2)
+    d_denom_dx1 = 2*x1 + math.sin(0.01*x1*x2) * (0.01*x2)
+    d_denom_dx2 = 4*x2 + math.sin(0.01*x1*x2) * (0.01*x1)
 
-    return np.array([
-        [df1dx1, df1dx2],
-        [df2dx1, df2dx2]
-    ])
+    d21 = -4 * d_denom_dx1 / (denom*denom)
+    d22 = -4 * d_denom_dx2 / (denom*denom)
 
-# -----------------------------
-# Метод Ньютона
-# -----------------------------
+    return [
+        [d11, d12],
+        [d21, d22]
+    ]
+
+
 def newton_method(x0, eps=1e-6, max_iter=50):
-    x = np.array(x0, dtype=float)
+    x = x0
 
     for k in range(max_iter):
         Fx = F(x)
         Jx = J(x)
+        J_inv = mat_inv_2x2(Jx)
 
-        # Решаем J * dx = F
-        dx = np.linalg.solve(Jx, Fx)
+        step = mat_vec_mul(J_inv, Fx)
+        x_new = vec_sub(x, step)
 
-        x_new = x - dx
-
-        if vec_norm(dx) < eps:
-            return x_new, k+1, F(x_new)
+        if vec_norm(step) < eps:
+            return x_new, k+1, F(x_new), vec_norm(F(x_new))
 
         x = x_new
 
-    return x, max_iter, F(x)
+    return x, max_iter, F(x), vec_norm(F(x))
 
-# -----------------------------
-# Запуск решения
-# -----------------------------
-x0 = [0.5, 0.5]  # начальное приближение — можно менять
-solution, iterations, residual = newton_method(x0)
 
-print("\nРЕЗУЛЬТАТ РЕШЕНИЯ СИСТЕМЫ:")
-print_vector("r*", solution)
-print_vector("F(r*)", residual)
-print(f"Количество итераций: {iterations}")
-print(f"Точность ε: {vec_norm(residual):.8e}")
+x0 = [0.5, 0.5]
+
+x_star, k, F_val, eps_val = newton_method(x0)
+
+print("\n===== РЕЗУЛЬТАТЫ РАБОТЫ ПРОГРАММЫ =====")
+print(f"Решение x^(k) = [{x_star[0]:.8f}, {x_star[1]:.8f}]")
+print(f"Количество итераций k = {k}")
+print(f"Вектор F(x^(k)) = [{F_val[0]:.8e}, {F_val[1]:.8e}]")
+print(f"Точность ε = {eps_val:.8e}")
