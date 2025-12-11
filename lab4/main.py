@@ -23,7 +23,7 @@ class LUSolver:
                 else:
                     sum_val = sum(L[k][j] * U[j][i] for j in range(i))
                     if abs(U[i][i]) < 1e-10:
-                        raise ValueError("Деление на ноль. Матрица вырождена.")
+                        raise ValueError("Деление на ноль")
                     L[k][i] = (A[k][i] - sum_val) / U[i][i]
         
         return L, U
@@ -49,7 +49,7 @@ class LUSolver:
         for i in range(n - 1, -1, -1):
             sum_val = sum(U[i][j] * x[j] for j in range(i + 1, n))
             if abs(U[i][i]) < 1e-10:
-                raise ValueError("Деление на ноль. Матрица вырождена.")
+                raise ValueError("Деление на ноль")
             x[i] = (y[i] - sum_val) / U[i][i]
         
         return x
@@ -81,11 +81,8 @@ class LUSolver:
 
 
 class SeidelSolver:
-    """Класс для решения СЛАУ методом Зейделя"""
-    
     @staticmethod
     def check_convergence(A):
-        """Проверка диагонального преобладания для сходимости"""
         n = len(A)
         for i in range(n):
             diagonal = abs(A[i][i])
@@ -96,22 +93,17 @@ class SeidelSolver:
     
     @staticmethod
     def solve(A, b, epsilon=1e-4, max_iterations=1000):
-        """
-        Решение СЛАУ методом Зейделя
-        epsilon - точность
-        max_iterations - максимальное число итераций
-        """
         n = len(A)
-        x = [0.0] * n  # начальное приближение
+        x = [0.0] * n
         x_prev = [0.0] * n
         iterations = 0
-        history = []  # история итераций
+        history = []
         
         for iteration in range(max_iterations):
             iterations += 1
             x_prev = x.copy()
             
-            # Метод Зейделя: используем уже вычисленные значения на текущей итерации
+            # метод зейделя
             for i in range(n):
                 sum_val = 0.0
                 for j in range(n):
@@ -119,21 +111,18 @@ class SeidelSolver:
                         sum_val += A[i][j] * x[j]
                 
                 if abs(A[i][i]) < 1e-10:
-                    raise ValueError("Деление на ноль. Проверьте матрицу.")
+                    raise ValueError("Деление на ноль")
                 
                 x[i] = (b[i] - sum_val) / A[i][i]
             
-            # Вычисляем максимальную разницу компонент
             max_diff = max(abs(x[i] - x_prev[i]) for i in range(n))
             
-            # Сохраняем историю
             history.append({
                 'iteration': iteration + 1,
                 'x': x.copy(),
                 'max_diff': max_diff
             })
             
-            # Проверка точности
             if max_diff < epsilon:
                 break
         
@@ -141,7 +130,6 @@ class SeidelSolver:
     
     @staticmethod
     def calculate_residual(A, x, b):
-        """Вычисление невязки r = Ax - b"""
         n = len(A)
         residual = []
         
@@ -153,7 +141,6 @@ class SeidelSolver:
     
     @staticmethod
     def residual_norm(residual):
-        """Вычисление нормы невязки"""
         return sum(r ** 2 for r in residual) ** 0.5
 
 
@@ -433,20 +420,16 @@ class SeidelTab(ttk.Frame):
             return
         
         try:
-            # Проверка сходимости
             if not SeidelSolver.check_convergence(A):
                 messagebox.showwarning("Предупреждение", 
                     "Матрица не имеет диагонального преобладания.\n" +
                     "Метод Зейделя может не сойтись!")
             
-            # Решаем СЛАУ
             x, iterations, history = SeidelSolver.solve(A, b, epsilon, max_iter)
-            
-            # Вычисляем невязку
+
             residual = SeidelSolver.calculate_residual(A, x, b)
             residual_norm = SeidelSolver.residual_norm(residual)
             
-            # Выводим результаты
             self.result_text.delete(1.0, tk.END)
             
             self.result_text.insert(tk.END, "=" * 80 + "\n")
@@ -456,7 +439,6 @@ class SeidelTab(ttk.Frame):
             self.result_text.insert(tk.END, f"Точность: ε = {epsilon}\n")
             self.result_text.insert(tk.END, f"Количество итераций: {iterations}\n\n")
             
-            # Показываем последние 10 итераций
             self.result_text.insert(tk.END, "Последние итерации:\n")
             self.result_text.insert(tk.END, "-" * 80 + "\n")
             start_idx = max(0, len(history) - 10)
